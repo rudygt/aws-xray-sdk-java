@@ -13,6 +13,7 @@ sourceSets {
 }
 
 dependencies {
+    implementation(project(mapOf("path" to ":aws-xray-recorder-sdk-aws-sdk-core")))
     jmh(project(":aws-xray-recorder-sdk-core"))
 
     jmh("org.openjdk.jmh:jmh-generator-annprocess:${JMH_VERSION}")
