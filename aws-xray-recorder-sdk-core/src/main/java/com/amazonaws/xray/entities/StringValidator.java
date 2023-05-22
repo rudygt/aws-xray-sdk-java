@@ -30,13 +30,39 @@ public class StringValidator {
         return string != null && !string.trim().isEmpty();
     }
 
+    @EnsuresNonNullIf(expression = "#1", result = true)
+    public static boolean isNotNullOrBlankFast(@Nullable String string) {
+        if (string == null) {
+            return false;
+        }
+        for (int i = 0; i < string.length(); i++) {
+            if (!Character.isWhitespace(string.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @EnsuresNonNullIf(expression = "#1", result = false)
     public static boolean isNullOrBlank(@Nullable String string) {
         return string == null || string.trim().isEmpty();
     }
 
+    @EnsuresNonNullIf(expression = "#1", result = false)
+    public static boolean isNullOrBlankFast(@Nullable String string) {
+        if (string == null) {
+            return true;
+        }
+        for (int i = 0; i < string.length(); i++) {
+            if (!Character.isWhitespace(string.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static void throwIfNullOrBlank(@Nullable String string, String validationErrorMessage) {
-        if (string == null || string.trim().isEmpty()) {
+        if (isNullOrBlankFast(string)) {
             throw new RuntimeException(validationErrorMessage);
         }
     }

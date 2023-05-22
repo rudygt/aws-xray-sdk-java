@@ -35,24 +35,29 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class TraceHeaderBenchmark {
 
-    private static final String HEADER_STRING = "Root=1-8a3c60f7-d188f8fa79d48a391a778fa6;Parent=53995c3f42cd8ad8;Sampled=1";
+    private static final String HEADER_STRING = "Root=1-8a3c60f7-d188f8fa79d48a391a778fa6;Parent=    53995c3f42cd8ad8      ;Sampled=1";
     private static final TraceHeader HEADER = TraceHeader.fromString(HEADER_STRING);
 
-    @Benchmark
+    /*@Benchmark
     public TraceHeader parse() {
         return TraceHeader.fromString(HEADER_STRING);
-    }
+    }*/
 
     @Benchmark
     public String serialize() {
         return HEADER.toString();
     }
 
+    @Benchmark
+    public String serializeFast() {
+        return HEADER.toStringFast();
+    }
+
     // Convenience main entry-point
     public static void main(String[] args) throws RunnerException {
         Options opt = new OptionsBuilder()
             .addProfiler("gc")
-            .include(".*" + TraceHeaderBenchmark.class.getSimpleName() + ".serialize")
+            .include(".*" + TraceHeaderBenchmark.class.getSimpleName() + ".*")
             .build();
 
         new Runner(opt).run();

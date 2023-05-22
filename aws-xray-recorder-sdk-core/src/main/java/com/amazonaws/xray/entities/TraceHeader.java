@@ -169,6 +169,24 @@ public class TraceHeader {
         return buffer.toString();
     }
 
+    public String toStringFast() {
+        StringBuilder buffer = RecyclableBuffers.stringBuilder();
+        if (rootTraceId != null) {
+            buffer.append(ROOT_PREFIX).append(rootTraceId).append(DELIMITER);
+        }
+        if (StringValidator.isNotNullOrBlankFast(parentId)) {
+            buffer.append(PARENT_PREFIX).append(parentId).append(DELIMITER);
+        }
+        buffer.append(sampled).append(DELIMITER);
+        for (Map.Entry<String, String> entry : additionalParams.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            buffer.append(key).append(EQUALS).append(value).append(DELIMITER);
+        }
+        buffer.setLength(buffer.length() - DELIMITER.length());
+        return buffer.toString();
+    }
+
     /**
      * @return the rootTraceId
      */

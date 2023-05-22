@@ -15,10 +15,14 @@
 
 package com.amazonaws.xray.handlers;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.http.AmazonHttpClient;
+import com.amazonaws.http.apache.client.impl.ApacheHttpClientFactory;
 import com.amazonaws.http.apache.client.impl.ConnectionManagerAwareHttpClient;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.lambda.AWSLambda;
@@ -41,6 +45,8 @@ import com.amazonaws.xray.strategy.LogErrorContextMissingStrategy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpVersion;
@@ -53,14 +59,21 @@ import org.apache.http.protocol.HttpContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mockito;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({AmazonHttpClient.class})
 class TracingHandlerTest {
 
     @BeforeEach
     void setupAWSXRay() {
-        Emitter blankEmitter = Mockito.mock(Emitter.class);
+        Emitter blankEmitter = mock(Emitter.class);
         Mockito.doReturn(true).when(blankEmitter).sendSegment(Mockito.anyObject());
         Mockito.doReturn(true).when(blankEmitter).sendSubsegment(Mockito.anyObject());
         AWSXRay.setGlobalRecorder(AWSXRayRecorderBuilder.standard().withEmitter(blankEmitter).build());
@@ -69,7 +82,7 @@ class TracingHandlerTest {
 
     private void mockHttpClient(Object client, String responseContent) {
         AmazonHttpClient amazonHttpClient = new AmazonHttpClient(new ClientConfiguration());
-        ConnectionManagerAwareHttpClient apacheHttpClient = Mockito.mock(ConnectionManagerAwareHttpClient.class);
+        ConnectionManagerAwareHttpClient apacheHttpClient = mock(ConnectionManagerAwareHttpClient.class);
         HttpResponse httpResponse = new BasicHttpResponse(new BasicStatusLine(HttpVersion.HTTP_1_1, 200, "OK"));
         BasicHttpEntity responseBody = new BasicHttpEntity();
         InputStream in = EmptyInputStream.INSTANCE;
@@ -80,8 +93,8 @@ class TracingHandlerTest {
         httpResponse.setEntity(responseBody);
 
         try {
-            Mockito.doReturn(httpResponse).when(apacheHttpClient).execute(Mockito.any(HttpUriRequest.class),
-                                                                          Mockito.any(HttpContext.class));
+            Mockito.doReturn(httpResponse).when(apacheHttpClient).execute(any(HttpUriRequest.class),
+                                                                          any(HttpContext.class));
         } catch (IOException e) {
             // Ignore
         }
@@ -113,8 +126,28 @@ class TracingHandlerTest {
         Assertions.assertEquals("testFunctionName", segment.getSubsegments().get(0).getAws().get("function_name"));
     }
 
+    static void setFinalStatic(Field field, Object newValue) throws Exception {
+        field.setAccessible(true);
+
+        // remove final modifier from field
+        Field modifiersField = Field.class.getDeclaredField("modifiers");
+        modifiersField.setAccessible(true);
+        modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+
+        field.set(null, newValue);
+    }
+
     @Test
-    void testS3PutObjectSubsegmentContainsBucketName() {
+    void testS3PutObjectSubsegmentContainsBucketName() throws Exception {
+
+        ApacheHttpClientFactory spyFactory = PowerMockito.spy(new ApacheHttpClientFactory());
+
+        // Mock the method calls on the spy
+        ConnectionManagerAwareHttpClient mockHttpClient = mock(ConnectionManagerAwareHttpClient.class);
+        PowerMockito.doReturn(mockHttpClient).when(spyFactory).create(any());
+
+        setFinalStatic(AmazonHttpClient.class.getDeclaredField("httpClientFactory"), spyFactory);
+
         // Setup test
         AmazonS3 s3 = AmazonS3ClientBuilder
             .standard()
@@ -136,13 +169,22 @@ class TracingHandlerTest {
     }
 
     @Test
-    void testS3CopyObjectSubsegmentContainsBucketName() {
+    void testS3CopyObjectSubsegmentContainsBucketName() throws Exception {
         // Setup test
         final String copyResponse = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                                     "<CopyObjectResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">" +
                                     "<LastModified>2018-01-21T10:09:54.000Z</LastModified><ETag>" +
                                     "&quot;31748afd7b576119d3c2471f39fc7a55&quot;</ETag>" +
                                     "</CopyObjectResult>";
+
+        ApacheHttpClientFactory spyFactory = PowerMockito.spy(new ApacheHttpClientFactory());
+
+        // Mock the method calls on the spy
+        ConnectionManagerAwareHttpClient mockHttpClient = mock(ConnectionManagerAwareHttpClient.class);
+        PowerMockito.doReturn(mockHttpClient).when(spyFactory).create(any());
+
+        setFinalStatic(AmazonHttpClient.class.getDeclaredField("httpClientFactory"), spyFactory);
+
         AmazonS3 s3 = AmazonS3ClientBuilder
             .standard()
             .withRequestHandlers(new TracingHandler())
